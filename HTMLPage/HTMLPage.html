@@ -1,0 +1,195 @@
+<head>
+    <title>Who Exists?</title>
+    <script src="https://unpkg.com/htmx.org@latest/dist/htmx.js"></script>
+    <style>
+        body {
+            display: flex;
+            justify-content: left;
+            height: 100vh;
+            margin-left: 10;
+        }
+
+        #header {
+            display: flex;
+            justify-content: left;
+            align-items: left;
+            height: 59;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: #f0f0f0;
+            z-index: 999;
+        }
+
+        #searchContainer {
+            width: 500;
+            display: flex;
+            justify-content: left;
+            align-items: left;
+            margin-top: 20px;
+            margin-left: 20px;
+            position: fixed,
+        }
+
+        #searchInput {
+            width: 100%;
+            height: 40px;
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        #content {
+            margin-top: 60px;
+            z-index: 1;
+        }
+
+        .container {
+            background-color: #FFFFFF;
+        }
+
+        .textFriends {
+            font-size: 20px;
+            text-align: left;
+            margin-left: 10px;
+            font-weight: bold;
+            margin-top: 10px;
+            color: #000000;
+        }
+
+        .itemContainer {
+            display: flex;
+            flex-direction: row;
+            align-items: left;
+            margin-left: 10px;
+            margin-right: 10px;
+            margin-top: 10px;
+            background-color: #FFFFFF;
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .image {
+            width: 50px;
+            height: 50px;
+            border-radius: 25px;
+        }
+
+        .textName {
+            font-size: 16px;
+            margin-left: 10px;
+            font-weight: 600;
+            color: #000000;
+        }
+
+        .textEmail {
+            font-size: 14px;
+            margin-left: 10px;
+            color: grey;
+        }
+
+        .textToken {
+            font-size: 12px;
+            margin-left: 10px;
+            color: green;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="header">
+        <div id="searchContainer">
+            <input type="text" id="searchInput" placeholder="Search..." oninput="searchFilterFunction(this.value)">
+        </div>
+    </div>
+    <div id="content"></div>
+
+    <script>
+        function fetchData(url) {
+            return fetch(url)
+                .then(response => response.json())
+                .then(users => {
+                    const updatedUsers = users.results.map(async (user) => {
+                        const id = `${user.gender.substring(0, 4)}${user.registered.age}${user.location.country.substring(0, 4)}`;
+                        const { gender, registered, location } = user;
+                        const apiUrl = `http://localhost:5218/user/generate-token/${id}`;
+
+                        try {
+                            const tokenResponse = await fetch(apiUrl);
+                            const tokenData = await tokenResponse.json();
+                            if (tokenResponse.ok) {
+                                return {
+                                    ...user,
+                                    token: tokenData.token
+                                };
+                            } else {
+                                console.error('Failed to fetch token:', tokenData.error);
+                                return {
+                                    ...user,
+                                    token: "ABCDENA"
+                                };
+                            }
+                        } catch (error) {
+                            console.error('Error fetching token:', error);
+                            return {
+                                ...user,
+                                token: "ABCDENA"
+                            };
+                        }
+                    });
+
+                    return Promise.all(updatedUsers);
+                });
+        }
+
+        function searchFilterFunction(text) {
+            const dataContainer = document.getElementById("dataContainer");
+            const data = JSON.parse(dataContainer.getAttribute("data-data"));
+
+            if (text) {
+                const newData = data.filter(item => {
+                    const fullName = `${item.name.first} ${item.name.last}`.toLocaleUpperCase();
+                    const searchText = text.toLocaleUpperCase();
+                    return fullName.includes(searchText);
+                });
+                renderData(newData);
+            } else {
+                renderData(data);
+            }
+        }
+
+        function renderData(data) {
+            const content = document.getElementById("content");
+            const html = data.map(item => `
+                <div class="itemContainer">
+                    <img src="${item.picture.large}" class="image">
+                    <div>
+                        <span class="textName"><br>&nbsp &nbsp${item.name.first} ${item.name.last}</span>
+                        <span class="textEmail">${item.gender} ${item.registered.age + 16}, ${item.location.country}</span>
+                        <span class="textToken">${item.token.slice(5)}</span>
+                    </div>
+                </div>
+            `).join("");
+
+            content.innerHTML = html;
+        }
+
+        window.addEventListener("load", () => {
+            fetchData("http://localhost:5218/user/generate-users")
+                .then(data => {
+                    const dataContainer = document.createElement("div");
+                    dataContainer.setAttribute("id", "dataContainer");
+                    dataContainer.setAttribute("data-data", JSON.stringify(data));
+                    dataContainer.style.display = "none";
+                    document.body.appendChild(dataContainer);
+
+                    renderData(data);
+                })
+                .catch(error => {
+                    console.error(error);
+                });
+        });
+    </script>
+</body>
